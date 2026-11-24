@@ -16,7 +16,7 @@ A simple command-line file organizer written in Rust to organize files and analy
 bash
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/Sash1ro/orgaz.git
 cd orgaz
 cargo build --release
 ```
@@ -70,48 +70,3 @@ bash
 ```bash
 orgaz stats ./documents --recursive
 ```
-
-### Configuration
-
-bash
-
-```bash
-orgaz config --show
-```
-
-## Development
-
-Run tests:
-
-bash
-
-```bash
-cargo test
-```
-
-Format code:
-
-bash
-
-```bash
-cargo fmt
-```
-
-Check code quality:
-
-bash
-
-```bash
-cargo clippy
-```
-
-## Built With
-
-- [Rust](<https://www.rust-lang.org/>)
-- [Clap](<https://docs.rs/clap/latest/clap/>) — CLI argument parsing
-- [Serde](<https://serde.rs/>) — Serialization
-- [Thiserror](<https://docs.rs/thiserror/latest/thiserror/>) — Error handling
-
-## License
-
-MIT
