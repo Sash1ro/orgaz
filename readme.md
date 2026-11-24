@@ -1,7 +1,3 @@
-Here is the complete `README.md` content, ready to save as `README.md`:
-
-Écriture
-
 # Orgaz
 
 A simple command-line file organizer written in Rust to organize files and analyze directory contents.
