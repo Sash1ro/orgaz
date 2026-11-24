@@ -39,7 +39,7 @@ Include hidden files:
 orgaz run ./documents --hidden
 ```
 
-### Display statistics
+Display statistics
 
 
 ```bash
