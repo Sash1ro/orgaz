@@ -14,7 +14,7 @@ pub struct Cli {
 pub enum Commands {
     /// Organize files in a directory
     Run {
-        target: PathBuf,
+        target: Option<PathBuf>,
 
         /// Preview changes without moving files
         #[arg(long)]

@@ -13,19 +13,13 @@ A simple command-line file organizer written in Rust to organize files and analy
 
 ## Installation
 
-bash
-
 ```bash
-git clone https://github.com/Sash1ro/orgaz.git
-cd orgaz
-cargo build --release
+cargo install --git https://github.com/Sash1ro/orgaz.git
 ```
 
 ## Usage
 
-### Organize files
-
-bash
+Organize files
 
 ```bash
 orgaz run ./documents
@@ -33,7 +27,6 @@ orgaz run ./documents
 
 Preview changes without modifying files:
 
-bash
 
 ```bash
 orgaz run ./documents --dry
@@ -41,7 +34,6 @@ orgaz run ./documents --dry
 
 Include hidden files:
 
-bash
 
 ```bash
 orgaz run ./documents --hidden
@@ -49,7 +41,6 @@ orgaz run ./documents --hidden
 
 ### Display statistics
 
-bash
 
 ```bash
 orgaz stats ./documents
@@ -57,7 +48,6 @@ orgaz stats ./documents
 
 Export statistics as JSON:
 
-bash
 
 ```bash
 orgaz stats ./documents --json
@@ -65,7 +55,6 @@ orgaz stats ./documents --json
 
 Include subdirectories:
 
-bash
 
 ```bash
 orgaz stats ./documents --recursive
