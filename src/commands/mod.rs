@@ -1,10 +1,18 @@
+pub mod run;
 pub mod stats;
 
 use crate::cli::Commands;
+use anyhow::Result;
 
-pub fn execute(command: Commands) -> Result<(), Box<dyn std::error::Error>> {
+pub fn execute(command: Commands) -> Result<()> {
     match command {
-        Commands::Run { target, dry, hidden } => {},
+        Commands::Run {
+            target,
+            dry,
+            hidden,
+        } => {
+            run::execute(target, dry, hidden)?;
+        }
         Commands::Stats {
             target,
             json,

@@ -36,7 +36,6 @@ pub enum Commands {
         /// Include hidden files
         #[arg(long)]
         hidden: bool,
-
     },
 
     
