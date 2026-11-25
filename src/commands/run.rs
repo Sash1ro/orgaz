@@ -9,11 +9,14 @@ pub fn execute(target: Option<PathBuf>, dry: bool, hidden: bool) -> Result<()> {
         Some(p) => p,
         None => env::current_dir().context("Failed to get current directory")?,
     };
+
     let stat: Stat = scanner::read(&path, hidden)?;
 
     if !dry {
-        scanner::backup(&path)?;
+        scanner::backup(&path, &stat)?;
     } 
+
+    scanner::organize(&path, &stat, dry)?;
 
     Ok(())
 }

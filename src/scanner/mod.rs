@@ -1,2 +1,2 @@
 pub mod scanner;
-pub use scanner::{backup, read};
+pub use scanner::{backup, read, organize};
