@@ -52,10 +52,3 @@ Export statistics as JSON:
 ```bash
 orgaz stats ./documents --json
 ```
-
-Include subdirectories:
-
-
-```bash
-orgaz stats ./documents --recursive
-```
