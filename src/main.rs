@@ -1,6 +1,6 @@
 fn main() {
     if let Err(err) = orgaz::run() {
-        eprintln!("Error: {err}");
+        orgaz::cli::report_error(&err);
         std::process::exit(1);
     }
 }

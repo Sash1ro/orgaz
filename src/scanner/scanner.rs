@@ -1,8 +1,9 @@
+use crate::cli;
 use crate::file::File;
 use crate::stats::Stat;
-use anyhow::{Context, Result, bail, ensure};
-use std::{env, fs};
+use anyhow::{Context, Result, ensure};
 use std::path::{Path, PathBuf};
+use std::{env, fs};
 
 pub fn read(path: &Path, show_hidden: bool) -> Result<Stat> {
     let content = fs::read_dir(path)
@@ -26,7 +27,9 @@ pub fn read(path: &Path, show_hidden: bool) -> Result<Stat> {
     Ok(stats)
 }
 
-pub fn organize(path: &Path, stat: &Stat, dry: bool) -> Result<()> {
+pub fn organize(path: &Path, stat: &Stat, dry: bool) -> Result<usize> {
+    let mut moved = 0;
+
     for file in stat.files.values().flatten() {
         if !file.is_file {
             continue;
@@ -34,23 +37,39 @@ pub fn organize(path: &Path, stat: &Stat, dry: bool) -> Result<()> {
 
         let dir = file.file_type.dir_name();
         let dir_path = path.join(dir);
-        let final_path = dir_path.join(file.name.to_owned());
+        let final_path = dir_path.join(&file.name);
 
-        if dry {
-            println!("[dry] {} => {}", file.path.display(), final_path.display());
+        if final_path.exists() {
+            cli::warning(format!(
+                "Skipped {} (already exists at {})",
+                file.name,
+                final_path.display()
+            ));
             continue;
         }
 
-        if !dir_path.exists() {
-            fs::create_dir_all(&dir_path)
-                .with_context(|| format!("Failed to create {}", dir_path.display()))?;
+        if dry {
+            cli::step(format!("[dry] {} -> {}", file.path.display(), final_path.display()));
+            moved += 1;
+            continue;
         }
 
-        fs::rename(&file.path, &final_path)
-            .with_context(|| format!("Failed to move {}", file.path.display()))?;
+        fs::create_dir_all(&dir_path)
+            .with_context(|| format!("Failed to create {}", dir_path.display()))?;
+
+        fs::rename(&file.path, &final_path).with_context(|| {
+            format!(
+                "Failed to move {} to {}",
+                file.path.display(),
+                final_path.display()
+            )
+        })?;
+
+        cli::info(format!("Moved {} -> {}", file.name, final_path.display()));
+        moved += 1;
     }
 
-    Ok(())
+    Ok(moved)
 }
 
 fn copy_entry(src_path: &Path, dst_path: &Path, is_dir: bool, is_symlink: bool) -> Result<()> {
@@ -106,6 +125,22 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<()> {
     Ok(())
 }
 
+fn unique_backup_path(parent: &Path, name: &str) -> PathBuf {
+    let initial = parent.join(format!("{name}.back"));
+    if !initial.exists() {
+        return initial;
+    }
+
+    for i in 1.. {
+        let candidate = parent.join(format!("{name}.back.{i}"));
+        if !candidate.exists() {
+            return candidate;
+        }
+    }
+
+    unreachable!("unbounded counter always finds a non-existent path")
+}
+
 pub fn backup(path: &Path, stat: &Stat) -> Result<PathBuf> {
     let abs_path = fs::canonicalize(path)
         .with_context(|| format!("Failed to resolve backup path {}", path.display()))?;
@@ -120,11 +155,7 @@ pub fn backup(path: &Path, stat: &Stat) -> Result<PathBuf> {
         .context("Could not determine directory name")?
         .to_string_lossy();
     let parent = env::temp_dir();
-    let backup_path = parent.join(format!("{name}.back"));
-
-    if backup_path.exists() {
-        bail!("Backup directory already exists: {}", backup_path.display());
-    }
+    let backup_path = unique_backup_path(&parent, &name);
 
     fs::create_dir_all(&backup_path)
         .with_context(|| format!("Failed to create directory {}", backup_path.display()))?;
@@ -135,4 +166,80 @@ pub fn backup(path: &Path, stat: &Stat) -> Result<PathBuf> {
     }
 
     Ok(backup_path)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    struct TempDir(PathBuf);
+
+    impl TempDir {
+        fn new(label: &str) -> Self {
+            let nanos = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos();
+            let path = env::temp_dir().join(format!("orgaz_unit_{label}_{nanos}"));
+            fs::create_dir_all(&path).unwrap();
+            Self(path)
+        }
+    }
+
+    impl Drop for TempDir {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[test]
+    fn organize_dry_does_not_move_files() {
+        let dir = TempDir::new("dry");
+        fs::write(dir.0.join("photo.png"), b"img").unwrap();
+
+        let stat = read(&dir.0, false).unwrap();
+        let count = organize(&dir.0, &stat, true).unwrap();
+
+        assert_eq!(count, 1);
+        assert!(dir.0.join("photo.png").exists());
+        assert!(!dir.0.join("Images").exists());
+    }
+
+    #[test]
+    fn organize_skips_collisions_without_overwriting() {
+        let dir = TempDir::new("collision");
+        fs::create_dir_all(dir.0.join("Images")).unwrap();
+        fs::write(dir.0.join("Images").join("photo.png"), b"original").unwrap();
+        fs::write(dir.0.join("photo.png"), b"new").unwrap();
+        fs::write(dir.0.join("notes.txt"), b"hello").unwrap();
+
+        let stat = read(&dir.0, false).unwrap();
+        let count = organize(&dir.0, &stat, false).unwrap();
+
+        assert_eq!(count, 1);
+        assert_eq!(
+            fs::read(dir.0.join("Images").join("photo.png")).unwrap(),
+            b"original"
+        );
+        assert!(dir.0.join("photo.png").exists());
+        assert!(dir.0.join("Documents").join("notes.txt").exists());
+    }
+
+    #[test]
+    fn backup_creates_unique_paths_on_repeat() {
+        let dir = TempDir::new("backup");
+        fs::write(dir.0.join("a.txt"), b"abc").unwrap();
+        let stat = read(&dir.0, false).unwrap();
+
+        let b1 = backup(&dir.0, &stat).unwrap();
+        let b2 = backup(&dir.0, &stat).unwrap();
+
+        assert_ne!(b1, b2);
+        assert!(b1.join("a.txt").exists());
+        assert!(b2.join("a.txt").exists());
+
+        let _ = fs::remove_dir_all(b1);
+        let _ = fs::remove_dir_all(b2);
+    }
 }

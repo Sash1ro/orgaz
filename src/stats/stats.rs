@@ -53,14 +53,13 @@ impl Stat {
     }
 
     pub fn add_file(&mut self, file: File) {
-        self.total_size += file.size;
-
         if file.is_symlink {
             self.nb_symlinks += 1;
         } else if file.is_dir {
             self.nb_dirs += 1;
         } else if file.is_file {
             self.nb_files += 1;
+            self.total_size += file.size;
         }
 
         self.files
