@@ -1,0 +1,148 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release tag (e.g. v0.1.0). Leave blank to use Cargo.toml version"
+        required: false
+        type: string
+      prerelease:
+        description: "Mark as pre-release"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Determine release tag
+        id: version
+        shell: bash
+        run: |
+          INPUT_VERSION="${{ github.event.inputs.version }}"
+          if [ -n "$INPUT_VERSION" ]; then
+            TAG="$INPUT_VERSION"
+          else
+            CRATE_VER=$(grep -m1 '^version' Cargo.toml | sed -E 's/.*"([^"]+)".*/\1/')
+            TAG="v${CRATE_VER}"
+          fi
+          if [[ "$TAG" != v* ]]; then
+            TAG="v${TAG}"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Release tag: $TAG"
+
+      - name: Run tests
+        run: cargo test --locked
+
+  build:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            ext: tar.gz
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            ext: tar.gz
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            ext: tar.gz
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            ext: zip
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Add Rust target
+        run: rustup target add ${{ matrix.target }}
+
+      - name: Build release binary
+        run: cargo build --release --locked --target ${{ matrix.target }}
+
+      - name: Package Unix archive
+        if: matrix.ext == 'tar.gz'
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp "target/${{ matrix.target }}/release/orgaz" dist/orgaz
+          tar -czf "orgaz-${{ matrix.target }}.tar.gz" -C dist orgaz
+
+      - name: Package Windows archive
+        if: matrix.ext == 'zip'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Copy-Item "target/${{ matrix.target }}/release/orgaz.exe" dist/orgaz.exe
+          Compress-Archive -Path dist/orgaz.exe -DestinationPath "orgaz-${{ matrix.target }}.zip"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: orgaz-${{ matrix.target }}
+          path: orgaz-${{ matrix.target }}.${{ matrix.ext }}
+
+  release:
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Copy installer scripts and compute checksums
+        shell: bash
+        run: |
+          cp install.sh artifacts/install.sh
+          cp install.ps1 artifacts/install.ps1
+          (cd artifacts && sha256sum orgaz-*.tar.gz orgaz-*.zip install.sh install.ps1 > checksums.txt)
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          PRERELEASE: ${{ github.event.inputs.prerelease }}
+          REPO: ${{ github.repository }}
+        run: |
+          FLAGS=(--target "${{ github.sha }}" --title "orgaz $TAG" --generate-notes)
+          if [ "$PRERELEASE" = "true" ]; then
+            FLAGS+=(--prerelease)
+          fi
+
+          cat <<'EOF' > release_notes.md
+          ### Quick Install (adds `orgaz` to your `PATH`)
+
+          **macOS / Linux:**
+          ```sh
+          curl -fsSL https://github.com/__REPO__/releases/download/__TAG__/install.sh | sh
+          ```
+
+          **Windows (PowerShell):**
+          ```powershell
+          irm https://github.com/__REPO__/releases/download/__TAG__/install.ps1 | iex
+          ```
+          EOF
+
+          sed -i "s|__REPO__|$REPO|g; s|__TAG__|$TAG|g" release_notes.md
+          gh release create "$TAG" artifacts/* "${FLAGS[@]}" --notes-file release_notes.md

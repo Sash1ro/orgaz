@@ -76,16 +76,18 @@ fn copy_entry(src_path: &Path, dst_path: &Path, is_dir: bool, is_symlink: bool) 
     if is_dir {
         copy_dir_recursive(src_path, dst_path)?;
     } else if is_symlink {
-        let link_target = fs::read_link(src_path)
-            .with_context(|| format!("Failed to read symlink {}", src_path.display()))?;
         #[cfg(unix)]
-        std::os::unix::fs::symlink(&link_target, dst_path).with_context(|| {
-            format!(
-                "Failed to create symlink {} -> {}",
-                dst_path.display(),
-                link_target.display()
-            )
-        })?;
+        {
+            let link_target = fs::read_link(src_path)
+                .with_context(|| format!("Failed to read symlink {}", src_path.display()))?;
+            std::os::unix::fs::symlink(&link_target, dst_path).with_context(|| {
+                format!(
+                    "Failed to create symlink {} -> {}",
+                    dst_path.display(),
+                    link_target.display()
+                )
+            })?;
+        }
     } else {
         fs::copy(src_path, dst_path).with_context(|| {
             format!(
