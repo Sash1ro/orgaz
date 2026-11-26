@@ -22,33 +22,33 @@ cargo install --git https://github.com/Sash1ro/orgaz.git
 Organize files
 
 ```bash
-orgaz run ./documents
+orgaz run ./downloads
 ```
 
 Preview changes without modifying files:
 
 
 ```bash
-orgaz run ./documents --dry
+orgaz run ./downloads --dry
 ```
 
 Include hidden files:
 
 
 ```bash
-orgaz run ./documents --hidden
+orgaz run ./downloads --hidden
 ```
 
 Display statistics
 
 
 ```bash
-orgaz stats ./documents
+orgaz stats ./downloads
 ```
 
 Export statistics as JSON:
 
 
 ```bash
-orgaz stats ./documents --json
+orgaz stats ./downloads --json
 ```
